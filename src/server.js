@@ -12,11 +12,11 @@ app.use(express.json());
 app.use("/items", itemRoutes);
 
 app.get("/", (req, res) => {
-	res.send("API is running");
+  res.send("API is running");
 });
 
 const PORT = 5000;
 
 app.listen(PORT, () => {
-	console.log(`Server is running on Port ${PORT}`);
+  console.log(`Server is running on Port ${PORT}`);
 });
