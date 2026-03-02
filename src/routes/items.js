@@ -1,8 +1,9 @@
+const authenticate = require("../middleware/auth");
 const express = require("express");
 const router = express.Router();
 const db = require("../firebase");
 
-router.post("/", async (req, res) => {
+router.post("/", authenticate, async (req, res) => {
   try {
     const { name, quantity, expiryDate, description, imageUrl } = req.body;
 
@@ -32,7 +33,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   try {
     const snapshot = await db
       .collection("foodItems")
@@ -50,7 +51,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
