@@ -31,8 +31,12 @@ app.get("/", (req, res) => {
   res.send("API is running");
 });
 
-const PORT = process.env.PORT || 5000;
+// For local development
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on Port ${PORT}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Server is running on Port ${PORT}`);
-});
+module.exports = app;
