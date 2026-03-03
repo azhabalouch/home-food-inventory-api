@@ -8,14 +8,12 @@ router.post("/", authenticate, async (req, res) => {
     const uid = req.user.uid;
     const { name, quantity, expiryDate, description, imageUrl } = req.body;
 
-    // Required field presence
     if (!name || quantity === undefined || !expiryDate) {
       return res.status(400).json({
         error: "Name, quantity and expiryDate are required",
       });
     }
 
-    // Name validation
     if (
       typeof name !== "string" ||
       name.trim().length === 0 ||
@@ -26,7 +24,6 @@ router.post("/", authenticate, async (req, res) => {
       });
     }
 
-    // Quantity validation
     const parsedQuantity = Number(quantity);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
       return res
@@ -34,7 +31,6 @@ router.post("/", authenticate, async (req, res) => {
         .json({ error: "Quantity must be a positive number" });
     }
 
-    // Date format validation
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate) ||
       isNaN(Date.parse(expiryDate))
@@ -44,7 +40,6 @@ router.post("/", authenticate, async (req, res) => {
       });
     }
 
-    // imageUrl must be a Firebase Storage URL if provided
     if (imageUrl) {
       if (
         typeof imageUrl !== "string" ||
@@ -56,13 +51,13 @@ router.post("/", authenticate, async (req, res) => {
     }
 
     const newItem = {
-      uid, // always set server-side — never trust the client for ownership
+      uid,
       name: name.trim(),
       quantity: parsedQuantity,
       expiryDate,
       description: typeof description === "string" ? description.trim() : "",
       imageUrl: imageUrl || "",
-      createdAt: new Date().toISOString(), // ISO string — serializes cleanly to JSON
+      createdAt: new Date().toISOString(),
     };
 
     const docRef = await db.collection("foodItems").add(newItem);
@@ -80,9 +75,6 @@ router.get("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
 
-    // Only return items that belong to the authenticated user.
-    // Sorting is done in JS to avoid requiring a Firestore composite index
-    // (composite indexes are needed when combining .where() + .orderBy() on different fields).
     const snapshot = await db
       .collection("foodItems")
       .where("uid", "==", uid)
@@ -109,7 +101,6 @@ router.delete("/:id", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Item not found" });
     }
 
-    // Ownership check — prevent IDOR: user A cannot delete user B's items
     if (doc.data().uid !== uid) {
       return res.status(403).json({ error: "Forbidden" });
     }

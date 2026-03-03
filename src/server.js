@@ -9,18 +9,10 @@ const profileRoutes = require("./routes/profile");
 
 const app = express();
 
-// Security headers
 app.use(helmet());
 
-// Restrict CORS to the known client origin
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGIN || "http://localhost:8081",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-  }),
-);
+app.use(cors({ origin: true }));
 
-// Rate limiting — 100 requests per 15 min per IP
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -30,7 +22,6 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Limit request body to 10 kb to prevent payload-flooding attacks
 app.use(express.json({ limit: "10kb" }));
 
 app.use("/items", itemRoutes);

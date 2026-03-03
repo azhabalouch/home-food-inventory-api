@@ -6,7 +6,6 @@ const authenticate = require("../middleware/auth");
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    // Email comes from the verified Firebase token � never trust req.body for this
     const email = req.user.email;
 
     const { firstName, lastName, username } = req.body;
@@ -67,7 +66,6 @@ router.put("/", authenticate, async (req, res) => {
     const uid = req.user.uid;
     const updateData = {};
 
-    // Whitelist writable fields � uid, email, isProfileComplete are server-managed
     const allowedFields = [
       "firstName",
       "lastName",
@@ -84,7 +82,6 @@ router.put("/", authenticate, async (req, res) => {
       }
     });
 
-    // Validate profileImageUrl � must be a real Firebase Storage URL
     if (updateData.profileImageUrl) {
       const url = updateData.profileImageUrl;
       if (
@@ -96,7 +93,6 @@ router.put("/", authenticate, async (req, res) => {
       }
     }
 
-    // Validate location shape if provided
     if (updateData.location !== undefined && updateData.location !== null) {
       const { latitude, longitude } = updateData.location;
       if (
@@ -111,7 +107,6 @@ router.put("/", authenticate, async (req, res) => {
       }
     }
 
-    // Compute isProfileComplete server-side � never trust the client for this
     const existingDoc = await db.collection("users").doc(uid).get();
     const existing = existingDoc.exists ? existingDoc.data() : {};
     const merged = { ...existing, ...updateData };
@@ -126,7 +121,6 @@ router.put("/", authenticate, async (req, res) => {
       merged.location
     );
 
-    // set + merge: creates if missing, patches if exists � safer than update()
     await db.collection("users").doc(uid).set(updateData, { merge: true });
 
     res.status(200).json({ message: "Profile updated successfully" });
