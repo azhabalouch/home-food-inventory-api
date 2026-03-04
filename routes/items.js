@@ -1,7 +1,29 @@
 const authenticate = require("../middleware/auth");
 const express = require("express");
 const router = express.Router();
-const { db } = require("../firebase");
+const { db, bucket } = require("../firebase");
+
+// Helper: reference to the Items subcollection for a given user
+const itemsRef = (uid) => db.collection("users").doc(uid).collection("Items");
+
+/**
+ * Extracts the Storage object path from a Firebase download URL and deletes it.
+ * Silently ignores errors (e.g. file already deleted).
+ */
+async function deleteStorageImage(imageUrl) {
+  try {
+    if (!imageUrl) return;
+    // Download URLs are encoded — decode before extracting the path
+    const decoded = decodeURIComponent(imageUrl);
+    const match = decoded.match(/\/o\/(.+?)\?/);
+    if (match) {
+      const filePath = match[1];
+      await bucket.file(filePath).delete();
+    }
+  } catch {
+    // Non-fatal: missing image should not block the delete
+  }
+}
 
 router.post("/", authenticate, async (req, res) => {
   try {
@@ -51,7 +73,6 @@ router.post("/", authenticate, async (req, res) => {
     }
 
     const newItem = {
-      uid,
       name: name.trim(),
       quantity: parsedQuantity,
       expiryDate,
@@ -60,7 +81,8 @@ router.post("/", authenticate, async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
-    const docRef = await db.collection("foodItems").add(newItem);
+    // Store under users/{uid}/Items subcollection
+    const docRef = await itemsRef(uid).add(newItem);
 
     res.status(201).json({
       id: docRef.id,
@@ -75,10 +97,8 @@ router.get("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
 
-    const snapshot = await db
-      .collection("foodItems")
-      .where("uid", "==", uid)
-      .get();
+    // All documents in the subcollection already belong to this user
+    const snapshot = await itemsRef(uid).get();
 
     const items = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -95,17 +115,17 @@ router.delete("/:id", authenticate, async (req, res) => {
     const uid = req.user.uid;
     const { id } = req.params;
 
-    const doc = await db.collection("foodItems").doc(id).get();
+    const docRef = itemsRef(uid).doc(id);
+    const doc = await docRef.get();
 
     if (!doc.exists) {
       return res.status(404).json({ error: "Item not found" });
     }
 
-    if (doc.data().uid !== uid) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    const { imageUrl } = doc.data();
 
-    await db.collection("foodItems").doc(id).delete();
+    // Delete Firestore document and Storage image in parallel
+    await Promise.all([docRef.delete(), deleteStorageImage(imageUrl)]);
 
     res.status(200).json({ message: "Item deleted successfully" });
   } catch (error) {

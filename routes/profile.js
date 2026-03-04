@@ -3,6 +3,10 @@ const router = express.Router();
 const { db } = require("../firebase");
 const authenticate = require("../middleware/auth");
 
+// Firestore path: /users/{uid}/Profile/data
+const profileRef = (uid) =>
+  db.collection("users").doc(uid).collection("Profile").doc("data");
+
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -16,28 +20,25 @@ router.post("/", authenticate, async (req, res) => {
         .json({ error: "firstName, lastName and username are required" });
     }
 
-    const existingDoc = await db.collection("users").doc(uid).get();
+    const existingDoc = await profileRef(uid).get();
 
     if (existingDoc.exists) {
       return res.status(400).json({ error: "Profile already exists" });
     }
 
-    await db
-      .collection("users")
-      .doc(uid)
-      .set({
-        uid,
-        email,
-        firstName: String(firstName).trim(),
-        lastName: String(lastName).trim(),
-        username: String(username).trim(),
-        phoneNumber: "",
-        profileImageUrl: "",
-        address: "",
-        location: null,
-        isProfileComplete: false,
-        createdAt: new Date(),
-      });
+    await profileRef(uid).set({
+      uid,
+      email,
+      firstName: String(firstName).trim(),
+      lastName: String(lastName).trim(),
+      username: String(username).trim(),
+      phoneNumber: "",
+      profileImageUrl: "",
+      address: "",
+      location: null,
+      isProfileComplete: false,
+      createdAt: new Date(),
+    });
 
     res.status(200).json({ message: "Profile created" });
   } catch (error) {
@@ -49,7 +50,7 @@ router.get("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
 
-    const doc = await db.collection("users").doc(uid).get();
+    const doc = await profileRef(uid).get();
 
     if (!doc.exists) {
       return res.status(404).json({ error: "Profile not found" });
@@ -107,7 +108,7 @@ router.put("/", authenticate, async (req, res) => {
       }
     }
 
-    const existingDoc = await db.collection("users").doc(uid).get();
+    const existingDoc = await profileRef(uid).get();
     const existing = existingDoc.exists ? existingDoc.data() : {};
     const merged = { ...existing, ...updateData };
 
@@ -121,12 +122,14 @@ router.put("/", authenticate, async (req, res) => {
       merged.location
     );
 
-    await db.collection("users").doc(uid).set(updateData, { merge: true });
+    await profileRef(uid).set(updateData, { merge: true });
 
     res.status(200).json({ message: "Profile updated successfully" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+module.exports = router;
 
 module.exports = router;
