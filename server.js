@@ -1,11 +1,11 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-require("dotenv").config();
-
 const itemRoutes = require("./routes/items");
 const profileRoutes = require("./routes/profile");
+const donationRoutes = require("./routes/donations");
 
 const app = express();
 
@@ -20,20 +20,21 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." },
 });
+
 app.use(limiter);
 
 app.use(express.json({ limit: "10kb" }));
 
 app.use("/items", itemRoutes);
 app.use("/profile", profileRoutes);
+app.use("/donations", donationRoutes);
 
 app.get("/", (req, res) => {
   res.send("API is running");
 });
 
-// For local development
 if (require.main === module) {
-  const PORT = process.env.PORT || 5000;
+  const PORT = process.env.PORT;
   app.listen(PORT, () => {
     console.log(`Server is running on Port ${PORT}`);
   });
