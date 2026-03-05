@@ -3,7 +3,6 @@ const router = express.Router();
 const { db } = require("../firebase");
 const authenticate = require("../middleware/auth");
 
-// Firestore path: /users/{uid}/Profile/data
 const profileRef = (uid) =>
   db.collection("users").doc(uid).collection("Profile").doc("data");
 
@@ -129,7 +128,5 @@ router.put("/", authenticate, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-module.exports = router;
 
 module.exports = router;
