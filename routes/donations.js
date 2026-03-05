@@ -111,6 +111,8 @@ router.get("/", authenticate, async (req, res) => {
 router.get("/my-active", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
+    const now = Date.now();
+    const THIRTY_MIN_MS = 30 * 60 * 1000;
 
     const [postedSnap, claimedSnap] = await Promise.all([
       donationsRef.where("userId", "==", uid).get(),
@@ -125,14 +127,20 @@ router.get("/my-active", authenticate, async (req, res) => {
       if (data.status === "available") return;
       seen.add(doc.id);
       const unreadCount = (data.unreadMessages || {})[uid] || 0;
-      donations.push({ id: doc.id, ...data, unreadCount });
+      const canConfirm =
+        data.status === "claimed" &&
+        !data.posterConfirmed &&
+        !!data.claimedAt &&
+        now - new Date(data.claimedAt).getTime() >= THIRTY_MIN_MS;
+      donations.push({ id: doc.id, ...data, unreadCount, canConfirm });
     });
 
     claimedSnap.docs.forEach((doc) => {
       if (seen.has(doc.id)) return;
       const data = doc.data();
       const unreadCount = (data.unreadMessages || {})[uid] || 0;
-      donations.push({ id: doc.id, ...data, unreadCount });
+      const canConfirm = !!data.posterConfirmed && !data.claimerConfirmed;
+      donations.push({ id: doc.id, ...data, unreadCount, canConfirm });
     });
 
     donations.sort(

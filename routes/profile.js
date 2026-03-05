@@ -6,6 +6,22 @@ const authenticate = require("../middleware/auth");
 const profileRef = (uid) =>
   db.collection("users").doc(uid).collection("Profile").doc("data");
 
+const usernameRef = (username) =>
+  db.collection("usernames").doc(username.toLowerCase());
+
+router.get("/check-username", async (req, res) => {
+  try {
+    const { username } = req.query;
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ error: "username is required" });
+    }
+    const doc = await usernameRef(username.trim()).get();
+    res.json({ available: !doc.exists });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -19,18 +35,28 @@ router.post("/", authenticate, async (req, res) => {
         .json({ error: "firstName, lastName and username are required" });
     }
 
-    const existingDoc = await profileRef(uid).get();
+    const normalizedUsername = String(username).trim();
+
+    const [existingDoc, usernameDoc] = await Promise.all([
+      profileRef(uid).get(),
+      usernameRef(normalizedUsername).get(),
+    ]);
 
     if (existingDoc.exists) {
       return res.status(400).json({ error: "Profile already exists" });
     }
 
-    await profileRef(uid).set({
+    if (usernameDoc.exists) {
+      return res.status(409).json({ error: "Username already taken" });
+    }
+
+    const batch = db.batch();
+    batch.set(profileRef(uid), {
       uid,
       email,
       firstName: String(firstName).trim(),
       lastName: String(lastName).trim(),
-      username: String(username).trim(),
+      username: normalizedUsername,
       phoneNumber: "",
       profileImageUrl: "",
       address: "",
@@ -38,6 +64,8 @@ router.post("/", authenticate, async (req, res) => {
       isProfileComplete: false,
       createdAt: new Date(),
     });
+    batch.set(usernameRef(normalizedUsername), { uid });
+    await batch.commit();
 
     res.status(200).json({ message: "Profile created" });
   } catch (error) {
@@ -109,6 +137,19 @@ router.put("/", authenticate, async (req, res) => {
 
     const existingDoc = await profileRef(uid).get();
     const existing = existingDoc.exists ? existingDoc.data() : {};
+
+    if (updateData.username !== undefined) {
+      const normalizedUsername = String(updateData.username).trim();
+      updateData.username = normalizedUsername;
+
+      if (normalizedUsername !== existing.username) {
+        const usernameDoc = await usernameRef(normalizedUsername).get();
+        if (usernameDoc.exists) {
+          return res.status(409).json({ error: "Username already taken" });
+        }
+      }
+    }
+
     const merged = { ...existing, ...updateData };
 
     updateData.isProfileComplete = !!(
@@ -121,7 +162,20 @@ router.put("/", authenticate, async (req, res) => {
       merged.location
     );
 
-    await profileRef(uid).set(updateData, { merge: true });
+    if (
+      updateData.username !== undefined &&
+      updateData.username !== existing.username
+    ) {
+      const batch = db.batch();
+      if (existing.username) {
+        batch.delete(usernameRef(existing.username));
+      }
+      batch.set(usernameRef(updateData.username), { uid });
+      batch.set(profileRef(uid), updateData, { merge: true });
+      await batch.commit();
+    } else {
+      await profileRef(uid).set(updateData, { merge: true });
+    }
 
     res.status(200).json({ message: "Profile updated successfully" });
   } catch (error) {
