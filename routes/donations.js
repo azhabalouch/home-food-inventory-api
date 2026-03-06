@@ -229,6 +229,28 @@ router.get("/pending-count", authenticate, async (req, res) => {
   }
 });
 
+router.get("/:id", authenticate, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const doc = await donationsRef.doc(req.params.id).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Donation not found" });
+    }
+
+    const data = doc.data();
+
+    // Only the poster or the claimer may fetch a single donation
+    if (data.userId !== uid && data.claimedByUserId !== uid) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    res.status(200).json({ id: doc.id, ...data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.patch("/:id/claim", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
