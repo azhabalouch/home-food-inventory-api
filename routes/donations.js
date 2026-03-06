@@ -6,14 +6,38 @@ const authenticate = require("../middleware/auth");
 
 const donationsRef = db.collection("donations");
 
+async function getUserFullName(uid) {
+  try {
+    const doc = await db
+      .collection("users")
+      .doc(uid)
+      .collection("Profile")
+      .doc("data")
+      .get();
+    if (doc.exists) {
+      const { firstName, lastName } = doc.data();
+      const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+      if (name) return name;
+    }
+  } catch (_) {
+    // fall through to fallback
+  }
+  return null;
+}
+
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    const userName =
-      req.user.name || req.user.email?.split("@")[0] || "Anonymous";
 
-    const { title, description, quantity, expiryDate, location, address } =
-      req.body;
+    const {
+      title,
+      description,
+      quantity,
+      expiryDate,
+      location,
+      address,
+      donationType,
+    } = req.body;
 
     if (!title || !quantity || !expiryDate || !location) {
       return res.status(400).json({
@@ -62,9 +86,17 @@ router.post("/", authenticate, async (req, res) => {
       return res.status(400).json({ error: "Invalid location coordinates" });
     }
 
+    const normalizedType = donationType === "request" ? "request" : "offer";
+
+    const userName =
+      (await getUserFullName(uid)) ||
+      req.user.email?.split("@")[0] ||
+      "Anonymous";
+
     const newDonation = {
       userId: uid,
       userName,
+      donationType: normalizedType,
       title: title.trim(),
       description: typeof description === "string" ? description.trim() : "",
       quantity: quantity.trim(),
@@ -200,8 +232,6 @@ router.get("/pending-count", authenticate, async (req, res) => {
 router.patch("/:id/claim", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    const claimedByName =
-      req.user.name || req.user.email?.split("@")[0] || "Anonymous";
 
     const docRef = donationsRef.doc(req.params.id);
     const doc = await docRef.get();
@@ -221,6 +251,11 @@ router.patch("/:id/claim", authenticate, async (req, res) => {
         .status(403)
         .json({ error: "You cannot claim your own donation" });
     }
+
+    const claimedByName =
+      (await getUserFullName(uid)) ||
+      req.user.email?.split("@")[0] ||
+      "Anonymous";
 
     await docRef.update({
       status: "claimed",
@@ -369,8 +404,6 @@ router.get("/:id/messages", authenticate, async (req, res) => {
 router.post("/:id/messages", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    const senderName =
-      req.user.name || req.user.email?.split("@")[0] || "Anonymous";
 
     const docRef = donationsRef.doc(req.params.id);
     const doc = await docRef.get();
@@ -397,6 +430,11 @@ router.post("/:id/messages", authenticate, async (req, res) => {
         error: "text must be a non-empty string under 500 characters",
       });
     }
+
+    const senderName =
+      (await getUserFullName(uid)) ||
+      req.user.email?.split("@")[0] ||
+      "Anonymous";
 
     const message = {
       senderId: uid,

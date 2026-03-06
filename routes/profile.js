@@ -6,57 +6,30 @@ const authenticate = require("../middleware/auth");
 const profileRef = (uid) =>
   db.collection("users").doc(uid).collection("Profile").doc("data");
 
-const usernameRef = (username) =>
-  db.collection("usernames").doc(username.toLowerCase());
-
-router.get("/check-username", async (req, res) => {
-  try {
-    const { username } = req.query;
-    if (!username || typeof username !== "string") {
-      return res.status(400).json({ error: "username is required" });
-    }
-    const doc = await usernameRef(username.trim()).get();
-    res.json({ available: !doc.exists });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
     const email = req.user.email;
 
-    const { firstName, lastName, username } = req.body;
+    const { firstName, lastName } = req.body;
 
-    if (!firstName || !lastName || !username) {
+    if (!firstName || !lastName) {
       return res
         .status(400)
-        .json({ error: "firstName, lastName and username are required" });
+        .json({ error: "firstName and lastName are required" });
     }
 
-    const normalizedUsername = String(username).trim();
-
-    const [existingDoc, usernameDoc] = await Promise.all([
-      profileRef(uid).get(),
-      usernameRef(normalizedUsername).get(),
-    ]);
+    const existingDoc = await profileRef(uid).get();
 
     if (existingDoc.exists) {
       return res.status(400).json({ error: "Profile already exists" });
     }
 
-    if (usernameDoc.exists) {
-      return res.status(409).json({ error: "Username already taken" });
-    }
-
-    const batch = db.batch();
-    batch.set(profileRef(uid), {
+    await profileRef(uid).set({
       uid,
       email,
       firstName: String(firstName).trim(),
       lastName: String(lastName).trim(),
-      username: normalizedUsername,
       phoneNumber: "",
       profileImageUrl: "",
       address: "",
@@ -64,8 +37,6 @@ router.post("/", authenticate, async (req, res) => {
       isProfileComplete: false,
       createdAt: new Date(),
     });
-    batch.set(usernameRef(normalizedUsername), { uid });
-    await batch.commit();
 
     res.status(200).json({ message: "Profile created" });
   } catch (error) {
@@ -97,10 +68,15 @@ router.put("/", authenticate, async (req, res) => {
     const allowedFields = [
       "firstName",
       "lastName",
-      "username",
       "phoneNumber",
       "address",
+      "addressLine1",
+      "addressLine2",
+      "addressCity",
+      "addressPostalCode",
+      "addressCountry",
       "location",
+      "locationAddress",
       "profileImageUrl",
     ];
 
@@ -138,44 +114,18 @@ router.put("/", authenticate, async (req, res) => {
     const existingDoc = await profileRef(uid).get();
     const existing = existingDoc.exists ? existingDoc.data() : {};
 
-    if (updateData.username !== undefined) {
-      const normalizedUsername = String(updateData.username).trim();
-      updateData.username = normalizedUsername;
-
-      if (normalizedUsername !== existing.username) {
-        const usernameDoc = await usernameRef(normalizedUsername).get();
-        if (usernameDoc.exists) {
-          return res.status(409).json({ error: "Username already taken" });
-        }
-      }
-    }
-
     const merged = { ...existing, ...updateData };
 
     updateData.isProfileComplete = !!(
       merged.firstName &&
       merged.lastName &&
-      merged.username &&
       merged.phoneNumber &&
       merged.address &&
       merged.profileImageUrl &&
       merged.location
     );
 
-    if (
-      updateData.username !== undefined &&
-      updateData.username !== existing.username
-    ) {
-      const batch = db.batch();
-      if (existing.username) {
-        batch.delete(usernameRef(existing.username));
-      }
-      batch.set(usernameRef(updateData.username), { uid });
-      batch.set(profileRef(uid), updateData, { merge: true });
-      await batch.commit();
-    } else {
-      await profileRef(uid).set(updateData, { merge: true });
-    }
+    await profileRef(uid).set(updateData, { merge: true });
 
     res.status(200).json({ message: "Profile updated successfully" });
   } catch (error) {
