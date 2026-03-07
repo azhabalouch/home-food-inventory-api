@@ -32,8 +32,7 @@ router.post("/", authenticate, async (req, res) => {
       lastName: String(lastName).trim(),
       phoneNumber: "",
       profileImageUrl: "",
-      address: null,
-      location: null,
+      locationAddress: null,
       isProfileComplete: false,
       createdAt: new Date(),
     });
@@ -54,7 +53,9 @@ router.get("/", authenticate, async (req, res) => {
       return res.status(404).json({ error: "Profile not found" });
     }
 
-    res.status(200).json(doc.data());
+    // Achievements are served from /profile/achievements — omit here
+    const { earnedAchievementIds: _omit, ...profileData } = doc.data();
+    res.status(200).json(profileData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -69,10 +70,8 @@ router.put("/", authenticate, async (req, res) => {
       "firstName",
       "lastName",
       "phoneNumber",
-      "address",
-      "location",
+      "locationAddress",
       "profileImageUrl",
-      "earnedAchievementIds",
     ];
 
     allowedFields.forEach((field) => {
@@ -92,31 +91,16 @@ router.put("/", authenticate, async (req, res) => {
       }
     }
 
-    if (updateData.earnedAchievementIds !== undefined) {
-      const ids = updateData.earnedAchievementIds;
-      if (
-        !Array.isArray(ids) ||
-        ids.some((id) => typeof id !== "string" || id.length > 64)
-      ) {
-        return res
-          .status(400)
-          .json({ error: "Invalid earnedAchievementIds: must be string[]" });
+    if (
+      updateData.locationAddress !== undefined &&
+      updateData.locationAddress !== null
+    ) {
+      const loc = updateData.locationAddress;
+      if (typeof loc !== "object") {
+        return res.status(400).json({ error: "Invalid locationAddress" });
       }
-      // Deduplicate and limit to known achievement IDs to prevent abuse
-      const VALID_IDS = new Set([
-        "first-item",
-        "inventory-pro",
-        "first-donation",
-        "community-hero",
-        "zero-waste",
-      ]);
-      updateData.earnedAchievementIds = [
-        ...new Set(ids.filter((id) => VALID_IDS.has(id))),
-      ];
-    }
 
-    if (updateData.location !== undefined && updateData.location !== null) {
-      const { latitude, longitude } = updateData.location;
+      const { latitude, longitude } = loc;
       if (
         typeof latitude !== "number" ||
         typeof longitude !== "number" ||
@@ -127,29 +111,28 @@ router.put("/", authenticate, async (req, res) => {
       ) {
         return res.status(400).json({ error: "Invalid location coordinates" });
       }
-    }
 
-    if (updateData.address !== undefined && updateData.address !== null) {
-      const address = updateData.address;
-      if (typeof address !== "object") {
-        return res.status(400).json({ error: "Invalid address" });
-      }
-      const line1 = String(address.line1 ?? "").trim();
-      const city = String(address.city ?? "").trim();
-      const postalCode = String(address.postalCode ?? "").trim();
-      const country = String(address.country ?? "").trim();
-      const line2 = String(address.line2 ?? "").trim();
+      const line1 = String(loc.line1 ?? "").trim();
+      const city = String(loc.city ?? "").trim();
+      const postalCode = String(loc.postalCode ?? "").trim();
+      const country = String(loc.country ?? "").trim();
+      const line2 = String(loc.line2 ?? "").trim();
 
       if (!line1 || !city || !postalCode || !country) {
-        return res.status(400).json({ error: "Invalid address" });
+        return res.status(400).json({
+          error:
+            "Invalid locationAddress: line1, city, postalCode, and country are required",
+        });
       }
 
-      updateData.address = {
+      updateData.locationAddress = {
         line1,
         line2: line2 || undefined,
         city,
         postalCode,
         country,
+        latitude,
+        longitude,
       };
     }
 
@@ -162,14 +145,65 @@ router.put("/", authenticate, async (req, res) => {
       merged.firstName &&
       merged.lastName &&
       merged.phoneNumber &&
-      merged.address &&
-      merged.profileImageUrl &&
-      merged.location
+      merged.locationAddress &&
+      merged.profileImageUrl
     );
 
     await profileRef(uid).set(updateData, { merge: true });
 
     res.status(200).json({ message: "Profile updated successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /achievements — return only the earned achievement IDs
+router.get("/achievements", authenticate, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const doc = await profileRef(uid).get();
+    const earnedAchievementIds = doc.exists
+      ? (doc.data().earnedAchievementIds ?? [])
+      : [];
+    res.status(200).json({ earnedAchievementIds });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /achievements — update only the earned achievement IDs
+router.put("/achievements", authenticate, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { earnedAchievementIds } = req.body;
+
+    if (
+      !Array.isArray(earnedAchievementIds) ||
+      earnedAchievementIds.some(
+        (id) => typeof id !== "string" || id.length > 64,
+      )
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Invalid earnedAchievementIds: must be string[]" });
+    }
+
+    const VALID_IDS = new Set([
+      "first-item",
+      "inventory-pro",
+      "first-donation",
+      "community-hero",
+      "zero-waste",
+    ]);
+    const sanitized = [
+      ...new Set(earnedAchievementIds.filter((id) => VALID_IDS.has(id))),
+    ];
+
+    await profileRef(uid).set(
+      { earnedAchievementIds: sanitized },
+      { merge: true },
+    );
+    res.status(200).json({ earnedAchievementIds: sanitized });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
