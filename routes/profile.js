@@ -72,6 +72,7 @@ router.put("/", authenticate, async (req, res) => {
       "address",
       "location",
       "profileImageUrl",
+      "earnedAchievementIds",
     ];
 
     allowedFields.forEach((field) => {
@@ -89,6 +90,29 @@ router.put("/", authenticate, async (req, res) => {
       ) {
         return res.status(400).json({ error: "Invalid profile image URL" });
       }
+    }
+
+    if (updateData.earnedAchievementIds !== undefined) {
+      const ids = updateData.earnedAchievementIds;
+      if (
+        !Array.isArray(ids) ||
+        ids.some((id) => typeof id !== "string" || id.length > 64)
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Invalid earnedAchievementIds: must be string[]" });
+      }
+      // Deduplicate and limit to known achievement IDs to prevent abuse
+      const VALID_IDS = new Set([
+        "first-item",
+        "inventory-pro",
+        "first-donation",
+        "community-hero",
+        "zero-waste",
+      ]);
+      updateData.earnedAchievementIds = [
+        ...new Set(ids.filter((id) => VALID_IDS.has(id))),
+      ];
     }
 
     if (updateData.location !== undefined && updateData.location !== null) {
