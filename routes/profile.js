@@ -32,7 +32,7 @@ router.post("/", authenticate, async (req, res) => {
       lastName: String(lastName).trim(),
       phoneNumber: "",
       profileImageUrl: "",
-      address: "",
+      address: null,
       location: null,
       isProfileComplete: false,
       createdAt: new Date(),
@@ -70,13 +70,7 @@ router.put("/", authenticate, async (req, res) => {
       "lastName",
       "phoneNumber",
       "address",
-      "addressLine1",
-      "addressLine2",
-      "addressCity",
-      "addressPostalCode",
-      "addressCountry",
       "location",
-      "locationAddress",
       "profileImageUrl",
     ];
 
@@ -109,6 +103,30 @@ router.put("/", authenticate, async (req, res) => {
       ) {
         return res.status(400).json({ error: "Invalid location coordinates" });
       }
+    }
+
+    if (updateData.address !== undefined && updateData.address !== null) {
+      const address = updateData.address;
+      if (typeof address !== "object") {
+        return res.status(400).json({ error: "Invalid address" });
+      }
+      const line1 = String(address.line1 ?? "").trim();
+      const city = String(address.city ?? "").trim();
+      const postalCode = String(address.postalCode ?? "").trim();
+      const country = String(address.country ?? "").trim();
+      const line2 = String(address.line2 ?? "").trim();
+
+      if (!line1 || !city || !postalCode || !country) {
+        return res.status(400).json({ error: "Invalid address" });
+      }
+
+      updateData.address = {
+        line1,
+        line2: line2 || undefined,
+        city,
+        postalCode,
+        country,
+      };
     }
 
     const existingDoc = await profileRef(uid).get();
