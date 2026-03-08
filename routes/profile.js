@@ -98,7 +98,10 @@ router.put("/", authenticate, async (req, res) => {
         return res.status(400).json({ error: "Invalid locationAddress" });
       }
 
-      const { latitude, longitude } = loc;
+      const addressObj = loc.address;
+      const latitude = loc.location.latitude;
+      const longitude = loc.location.longitude;
+
       if (
         typeof latitude !== "number" ||
         typeof longitude !== "number" ||
@@ -110,11 +113,11 @@ router.put("/", authenticate, async (req, res) => {
         return res.status(400).json({ error: "Invalid location coordinates" });
       }
 
-      const line1 = String(loc.line1 ?? "").trim();
-      const city = String(loc.city ?? "").trim();
-      const postalCode = String(loc.postalCode ?? "").trim();
-      const country = String(loc.country ?? "").trim();
-      const line2 = String(loc.line2 ?? "").trim();
+      const line1 = String(addressObj.line1 ?? "").trim();
+      const city = String(addressObj.city ?? "").trim();
+      const postalCode = String(addressObj.postalCode ?? "").trim();
+      const country = String(addressObj.country ?? "").trim();
+      const line2 = String(addressObj.line2 ?? "").trim();
 
       if (!line1 || !city || !postalCode || !country) {
         return res.status(400).json({
