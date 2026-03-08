@@ -6,6 +6,10 @@ const authenticate = require("../middleware/auth");
 const profileRef = (uid) =>
   db.collection("users").doc(uid).collection("Profile").doc("data");
 
+// achievements stored in a separate document inside Profile (alongside 'data')
+const achievementsRef = (uid) =>
+  db.collection("users").doc(uid).collection("Profile").doc("achievements");
+
 router.post("/", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -53,7 +57,7 @@ router.get("/", authenticate, async (req, res) => {
     }
 
     // Achievements are served from /profile/achievements — omit here
-    const { earnedAchievementIds: _omit, ...profileData } = doc.data();
+    const profileData = doc.data();
     res.status(200).json(profileData);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -161,13 +165,13 @@ router.put("/", authenticate, async (req, res) => {
   }
 });
 
-// GET /achievements — return only the earned achievement IDs
+// GET /achievements — read the array from the profile’s achievements document
 router.get("/achievements", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
-    const doc = await profileRef(uid).get();
+    const doc = await achievementsRef(uid).get();
     const earnedAchievementIds = doc.exists
-      ? (doc.data().earnedAchievementIds ?? [])
+      ? doc.data().earnedAchievementIds || []
       : [];
     res.status(200).json({ earnedAchievementIds });
   } catch (error) {
@@ -175,7 +179,7 @@ router.get("/achievements", authenticate, async (req, res) => {
   }
 });
 
-// PUT /achievements — update only the earned achievement IDs
+// PUT /achievements — store the array in the profile’s achievements document
 router.put("/achievements", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -203,10 +207,8 @@ router.put("/achievements", authenticate, async (req, res) => {
       ...new Set(earnedAchievementIds.filter((id) => VALID_IDS.has(id))),
     ];
 
-    await profileRef(uid).set(
-      { earnedAchievementIds: sanitized },
-      { merge: true },
-    );
+    await achievementsRef(uid).set({ earnedAchievementIds: sanitized });
+
     res.status(200).json({ earnedAchievementIds: sanitized });
   } catch (error) {
     res.status(500).json({ error: error.message });
