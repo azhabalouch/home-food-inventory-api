@@ -124,13 +124,17 @@ router.put("/", authenticate, async (req, res) => {
       }
 
       updateData.locationAddress = {
-        line1,
-        line2: line2 || undefined,
-        city,
-        postalCode,
-        country,
-        latitude,
-        longitude,
+        address: {
+          line1,
+          line2: line2 || undefined,
+          city,
+          postalCode,
+          country,
+        },
+        location: {
+          latitude,
+          longitude,
+        },
       };
     }
 
