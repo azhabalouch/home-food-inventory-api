@@ -133,7 +133,7 @@ router.put("/", authenticate, async (req, res) => {
       updateData.locationAddress = {
         address: {
           line1,
-          line2: line2 || undefined,
+          line2: line2 || "",
           city,
           postalCode,
           country,
