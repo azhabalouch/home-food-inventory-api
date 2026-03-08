@@ -30,7 +30,6 @@ router.post("/", authenticate, async (req, res) => {
       email,
       firstName: String(firstName).trim(),
       lastName: String(lastName).trim(),
-      phoneNumber: "",
       profileImageUrl: "",
       locationAddress: null,
       isProfileComplete: false,
@@ -69,7 +68,6 @@ router.put("/", authenticate, async (req, res) => {
     const allowedFields = [
       "firstName",
       "lastName",
-      "phoneNumber",
       "locationAddress",
       "profileImageUrl",
     ];
@@ -144,7 +142,6 @@ router.put("/", authenticate, async (req, res) => {
     updateData.isProfileComplete = !!(
       merged.firstName &&
       merged.lastName &&
-      merged.phoneNumber &&
       merged.locationAddress &&
       merged.profileImageUrl
     );
