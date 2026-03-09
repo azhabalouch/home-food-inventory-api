@@ -37,6 +37,7 @@ router.post("/", authenticate, async (req, res) => {
       location,
       address,
       donationType,
+      inventoryItemId,
     } = req.body;
 
     if (!title || !quantity || !expiryDate || !location) {
@@ -115,6 +116,11 @@ router.post("/", authenticate, async (req, res) => {
       claimerConfirmedAt: null,
 
       unreadMessages: {},
+
+      inventoryItemId:
+        typeof inventoryItemId === "string" && inventoryItemId.trim()
+          ? inventoryItemId.trim()
+          : null,
     };
 
     const docRef = await donationsRef.add(newDonation);
@@ -325,6 +331,20 @@ router.patch("/:id/claim", authenticate, async (req, res) => {
       claimedByName,
       claimedAt: new Date().toISOString(),
     });
+
+    // Remove the linked inventory item from the donor's subcollection
+    if (donation.inventoryItemId) {
+      try {
+        await db
+          .collection("users")
+          .doc(donation.userId)
+          .collection("Items")
+          .doc(donation.inventoryItemId)
+          .delete();
+      } catch (_) {
+        // Non-fatal: item may have already been deleted
+      }
+    }
 
     res.status(200).json({ message: "Donation claimed successfully" });
   } catch (error) {
