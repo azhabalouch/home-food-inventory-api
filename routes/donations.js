@@ -229,6 +229,46 @@ router.get("/pending-count", authenticate, async (req, res) => {
   }
 });
 
+router.get("/my-completed", authenticate, async (req, res) => {
+  try {
+    const uid = req.user.uid;
+
+    const [postedSnap, claimedSnap] = await Promise.all([
+      donationsRef
+        .where("userId", "==", uid)
+        .where("status", "==", "completed")
+        .get(),
+      donationsRef
+        .where("claimedByUserId", "==", uid)
+        .where("status", "==", "completed")
+        .get(),
+    ]);
+
+    const seen = new Set();
+    const donations = [];
+
+    postedSnap.docs.forEach((doc) => {
+      seen.add(doc.id);
+      donations.push({ id: doc.id, ...doc.data() });
+    });
+
+    claimedSnap.docs.forEach((doc) => {
+      if (seen.has(doc.id)) return;
+      donations.push({ id: doc.id, ...doc.data() });
+    });
+
+    donations.sort(
+      (a, b) =>
+        new Date(b.claimerConfirmedAt || b.createdAt) -
+        new Date(a.claimerConfirmedAt || a.createdAt),
+    );
+
+    res.status(200).json(donations);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get("/:id", authenticate, async (req, res) => {
   try {
     const uid = req.user.uid;
